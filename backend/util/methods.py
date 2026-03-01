@@ -9,7 +9,7 @@ from typing import Dict, Any, List, Optional
 from fastapi import UploadFile, HTTPException
 from fastapi.responses import JSONResponse
 from pathlib import Path
-from consts import EXTENSIONS, FRAMEWORKS, PACKAGES, MAX_UPLOAD, UPLOAD_EXT
+from util.consts import EXTENSIONS, FRAMEWORKS, PACKAGES, MAX_UPLOAD, UPLOAD_EXT
 
 # grabs languages from file extensions
 def get_languages(files: List[Path]) -> List[str]:

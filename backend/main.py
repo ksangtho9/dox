@@ -9,9 +9,18 @@ import util.consts as consts
 from pathlib import Path
 from typing import Dict, Any, List, Optional
 from fastapi import FastAPI, File, UploadFile, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 app = FastAPI(title = "repo analyzer")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 @app.post('/analyze')
 async def generate_md(file: UploadFile = File(...)):
