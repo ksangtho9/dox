@@ -4,7 +4,7 @@ import { useState, useRef } from 'react';
 import Image from 'next/image';
 import { createPortal } from 'react-dom';
 import { FallingPattern } from '@/components/ui/falling-pattern';
-import { Upload, Github, ArrowRight, Loader2, AlertCircle } from 'lucide-react';
+import { Upload, Loader2, AlertCircle } from 'lucide-react';
 
 function getApiBaseUrl(): string {
   const env = process.env.NEXT_PUBLIC_API_URL ?? '';
@@ -188,29 +188,6 @@ export default function Home() {
             </div>,
             document.body
           )}
-
-        {/* Separator */}
-        <p className="mb-6 text-xs text-zinc-500">or</p>
-
-        {/* URL input + Analyze button */}
-        <div className="mb-24 flex w-full max-w-2xl flex-col gap-3 sm:flex-row">
-          <div className="relative flex flex-1">
-            <Github className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-zinc-500" />
-            <input
-              type="url"
-              placeholder="https://github.com/user/repo"
-              className="font-pixel w-full rounded-lg border border-zinc-700 bg-white/[0.04] py-3 pl-10 pr-4 text-sm text-white placeholder:text-zinc-500 focus:border-[var(--primary)] focus:outline-none focus:ring-1 focus:ring-[var(--primary)]"
-            />
-          </div>
-          <button
-            type="button"
-            className="font-pixel flex shrink-0 cursor-not-allowed items-center justify-center gap-2 rounded-lg bg-zinc-600 px-6 py-3 text-sm text-zinc-400"
-            title="Coming soon"
-          >
-            Analyze
-            <ArrowRight className="h-4 w-4" />
-          </button>
-        </div>
       </div>
     </div>
   );
