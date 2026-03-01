@@ -48,14 +48,13 @@ export default function Home() {
               <span className="font-medium text-[var(--primary)]">browse</span>
             </p>
             <p className="text-[10px] text-zinc-500 sm:text-xs">
-              .zip, .tar.gz, or folder
+              .zip only
             </p>
             <input
               id="repo-drop"
               type="file"
               className="sr-only"
-              accept=".zip,.tar.gz"
-              multiple
+              accept=".zip,application/zip"
             />
           </label>
         </div>
