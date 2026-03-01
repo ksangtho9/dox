@@ -2,6 +2,7 @@
 
 import { useState, useRef } from 'react';
 import Image from 'next/image';
+import { createPortal } from 'react-dom';
 import { FallingPattern } from '@/components/ui/falling-pattern';
 import { Upload, Github, ArrowRight, Loader2, AlertCircle } from 'lucide-react';
 
@@ -178,12 +179,15 @@ export default function Home() {
           </div>
         )}
 
-        {/* Download success: fixed toast so it doesn't push "or" / GitHub down */}
-        {downloadSuccess && (
-          <div className="fixed bottom-6 left-1/2 z-20 w-full max-w-2xl -translate-x-1/2 rounded-xl border border-emerald-500/50 bg-emerald-500/10 px-4 py-3 text-center text-sm text-emerald-300 shadow-lg">
-            Your repo with generated README is downloading ({downloadSuccess.filename}).
-          </div>
-        )}
+        {/* Download success: portal to body so it never affects layout */}
+        {downloadSuccess &&
+          typeof document !== 'undefined' &&
+          createPortal(
+            <div className="fixed bottom-6 left-1/2 z-[9999] w-full max-w-2xl -translate-x-1/2 rounded-xl border border-emerald-500/50 bg-emerald-500/10 px-4 py-3 text-center text-sm text-emerald-300 shadow-lg">
+              Your repo with generated README is downloading ({downloadSuccess.filename}).
+            </div>,
+            document.body
+          )}
 
         {/* Separator */}
         <p className="mb-6 text-xs text-zinc-500">or</p>
