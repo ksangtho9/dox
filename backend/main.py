@@ -176,7 +176,14 @@ async def generate(file: UploadFile = File(...)):
             )
         except Exception:
             logger.exception("Diagram generation failed")
-            diagram_info = {"mmd": None, "svg": None, "rendered": False}
+            docs_dir = repo_dir / "docs"
+            fallback_mmd = docs_dir / "diagram.mmd"
+            try:
+                docs_dir.mkdir(parents=True, exist_ok=True)
+                fallback_mmd.write_text("flowchart TD\n  A[Architecture diagram unavailable]\n", encoding="utf-8")
+                diagram_info = {"mmd": str(fallback_mmd), "svg": None, "rendered": False}
+            except Exception:
+                diagram_info = {"mmd": None, "svg": None, "rendered": False}
 
         if diagram_info.get("rendered") and diagram_info.get("svg"):
             readme += "\n\n## Automatically generated architecture diagram\n\n"

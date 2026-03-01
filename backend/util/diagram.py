@@ -199,7 +199,8 @@ def make_docs_with_diagram(repo_dir: Path,
     try:
         mermaid_text = generate_mermaid_syntax(project_name, frameworks, dependencies, file_tree)
     except Exception:
-        return {"mmd": None, "svg": None, "rendered": False}
+        # Ensure docs/diagram.mmd still exists even if graph inference fails.
+        mermaid_text = "flowchart TD\n  A[Architecture diagram unavailable]\n"
 
     try:
         mmd_path.parent.mkdir(parents=True, exist_ok=True)
