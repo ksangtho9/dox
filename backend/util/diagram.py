@@ -1,6 +1,7 @@
 from pathlib import Path
 import subprocess
 import shutil
+from urllib import request
 from typing import Dict, List, Any, Optional
 
 try:
@@ -178,7 +179,25 @@ def render_mermaid_to_svg(mmd_path: Path, svg_path: Path, timeout: int = 20) -> 
             continue
         except Exception:
             continue
-    
+
+    # Fallback: use hosted Kroki renderer so Railway Python image can still produce SVG.
+    try:
+        mermaid_text = mmd_path.read_text(encoding="utf-8")
+        req = request.Request(
+            "https://kroki.io/mermaid/svg",
+            data=mermaid_text.encode("utf-8"),
+            headers={"Content-Type": "text/plain; charset=utf-8"},
+            method="POST",
+        )
+        with request.urlopen(req, timeout=timeout) as resp:
+            if resp.status == 200:
+                svg_bytes = resp.read()
+                if svg_bytes:
+                    svg_path.write_bytes(svg_bytes)
+                    return svg_path.exists()
+    except Exception:
+        pass
+
     return False
 
 # creates the docs folder and puts diagram in it
