@@ -3,3 +3,4 @@ node_modules
 .next
 .venv
 .vscode
+__pycache__
