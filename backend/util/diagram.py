@@ -9,6 +9,8 @@ try:
 except ImportError:
     from util.consts import DB_KEYWORDS, FRONTEND_KEYWORDS, SERVICE_DIR_KEYWORDS, MODEL_DIR_KEYWORDS, STATIC_DIR_KEYWORDS
 
+PUPPETEER_CONFIG_PATH = Path(__file__).resolve().with_name("puppeteer-config.json")
+
 # find database from dependencies
 def choose_db(deps: Dict[str, List[str]]) -> Optional[str]:
     if not deps:
@@ -166,8 +168,8 @@ def generate_mermaid_syntax(project_name: str,
 # changes mermaid file to image
 def render_mermaid_to_svg(mmd_path: Path, svg_path: Path, timeout: int = 20) -> bool:
     cmds = [
-        ["mmdc", "-i", str(mmd_path), "-o", str(svg_path)],
-        ["npx", "@mermaid-js/mermaid-cli", "-i", str(mmd_path), "-o", str(svg_path), "--quiet"]]
+        ["mmdc", "-p", str(PUPPETEER_CONFIG_PATH), "-i", str(mmd_path), "-o", str(svg_path)],
+        ["npx", "-y", "@mermaid-js/mermaid-cli", "-p", str(PUPPETEER_CONFIG_PATH), "-i", str(mmd_path), "-o", str(svg_path), "--quiet"]]
     
     for cmd in cmds:
         try:
