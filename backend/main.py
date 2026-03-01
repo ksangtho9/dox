@@ -1,26 +1,39 @@
-import zipfile
 import shutil
 import tempfile
-import json
 import re
-import uvicorn
-import util.methods as methods
-import util.consts as consts
+import os
 from pathlib import Path
-from typing import Dict, Any, List, Optional
 from fastapi import FastAPI, File, UploadFile, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+
+try:
+    from .util import methods
+except ImportError:
+    import util.methods as methods
 
 app = FastAPI(title = "repo analyzer")
 
+
+def _cors_origins() -> list[str]:
+    origins = os.getenv("CORS_ORIGINS", "http://localhost:3000,http://127.0.0.1:3000")
+    return [origin.strip() for origin in origins.split(",") if origin.strip()]
+
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
+    allow_origins=_cors_origins(),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+TEMPLATE_PATH = Path(__file__).resolve().parent / "util" / "template.md"
+
+
+@app.get("/health")
+async def health() -> dict[str, str]:
+    return {"status": "ok"}
+
 
 @app.post('/analyze')
 async def generate_md(file: UploadFile = File(...)):
@@ -95,9 +108,7 @@ async def generate_md(file: UploadFile = File(...)):
 
         env_txt = "\n".join(env_files) if env_files else "None detected"
         test_status = "Yes" if has_tests else "No"
-        template_path = Path("util") / "template.md"
-
-        if not template_path.exists():
+        if not TEMPLATE_PATH.exists():
             template_text = (
                 "# {project_name}\n\n"
                 "{summary}\n\n"
@@ -122,7 +133,7 @@ async def generate_md(file: UploadFile = File(...)):
             )
             template_path_text = template_text
         else:
-            template_path_text = template_path.read_text(encoding="utf-8")
+            template_path_text = TEMPLATE_PATH.read_text(encoding="utf-8")
 
         mapping = {
             "project_name": project_name,
@@ -167,3 +178,9 @@ async def generate_md(file: UploadFile = File(...)):
     except Exception:
         shutil.rmtree(tmpdir, ignore_errors=True)
         raise
+
+
+if __name__ == "__main__":
+    import uvicorn
+
+    uvicorn.run("main:app", host="0.0.0.0", port=int(os.getenv("PORT", "8000")))
