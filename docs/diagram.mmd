@@ -1,0 +1,25 @@
+flowchart TD
+  subgraph CLIENT["Client / Frontend"]
+    FE_angular["angular"]
+    FE_nextjs["nextjs"]
+    FE_react["react"]
+    FE_vue["vue"]
+  end
+  subgraph SERVER["repo"]
+    S1[angular]
+  end
+  FE_angular --> S1
+  FE_nextjs --> S1
+  FE_react --> S1
+  FE_vue --> S1
+  subgraph EXTRAS["Detected libraries"]
+    E1[util]
+    S1 --> E1
+    E2[fastapi]
+    S1 --> E2
+    E3[type]
+    S1 --> E3
+    E4[react]
+    S1 --> E4
+  end
+  S1 --> ENTRY["Entry: main.py"]
