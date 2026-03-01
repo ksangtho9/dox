@@ -1,8 +1,12 @@
 from pathlib import Path
 import subprocess
 import shutil
-from urllib import request
+import os
+import urllib.request
+import urllib.error
 from typing import Dict, List, Any, Optional
+import zlib
+import base64
 
 try:
     from .consts import DB_KEYWORDS, FRONTEND_KEYWORDS, SERVICE_DIR_KEYWORDS, MODEL_DIR_KEYWORDS, STATIC_DIR_KEYWORDS
@@ -10,6 +14,7 @@ except ImportError:
     from util.consts import DB_KEYWORDS, FRONTEND_KEYWORDS, SERVICE_DIR_KEYWORDS, MODEL_DIR_KEYWORDS, STATIC_DIR_KEYWORDS
 
 PUPPETEER_CONFIG_PATH = Path(__file__).resolve().with_name("puppeteer-config.json")
+_DISABLE_REMOTE = os.getenv("DOX_DISABLE_REMOTE_RENDER", "false").lower() in ("1", "true", "yes")
 
 # find database from dependencies
 def choose_db(deps: Dict[str, List[str]]) -> Optional[str]:
@@ -34,9 +39,8 @@ def choose_db(deps: Dict[str, List[str]]) -> Optional[str]:
                 return "mysql"
             if db in ("redis",):
                 return "redis"
-            
             return db
-    
+
     return None
 
 # grabs info from file tree
@@ -46,7 +50,7 @@ def detect_layers(file_tree: Dict[str, Any]) -> Dict[str, bool]:
     def walk(node, depth=0):
         if not node or depth > 3:
             return
-        
+
         name = node.get("name", "") or ""
         lower = name.lower()
 
@@ -107,7 +111,7 @@ def generate_mermaid_syntax(project_name: str,
         lines.append('  CLIENT --> S1')
 
     db = choose_db(dependencies)
-    
+
     if db:
         lines.append(f'  S1 --> DB[{db.upper()}]')
 
@@ -131,7 +135,7 @@ def generate_mermaid_syntax(project_name: str,
                 if isinstance(v, list) and v:
                     heur = v
                     break
-    
+
     if heur and isinstance(heur, list):
         top = heur[:4]
         if top:
@@ -145,18 +149,18 @@ def generate_mermaid_syntax(project_name: str,
     def _find_entry(node):
         if not node:
             return None
-        
+
         if node.get("type") == "file":
             nm = node.get("name", "").lower()
             if nm in ("main.py", "app.py", "server.py", "index.js", "app.js", "server.js"):
                 return node.get("name")
             return None
-        
+
         for c in node.get("children", []) or []:
             res = _find_entry(c)
             if res:
                 return res
-        
+
         return None
 
     entry = _find_entry(file_tree)
@@ -165,16 +169,55 @@ def generate_mermaid_syntax(project_name: str,
 
     return "\n".join(lines)
 
-# changes mermaid file to image
+# render via Kroki (POST)
+def render_via_kroki(mermaid_text: str, svg_path: Path, timeout: int = 15) -> bool:
+    url = "https://kroki.io/mermaid/svg"
+    data = mermaid_text.encode("utf-8")
+    req = urllib.request.Request(url, data=data, headers={"Content-Type": "text/plain; charset=utf-8"})
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            if resp.status == 200:
+                svg_bytes = resp.read()
+                svg_path.write_bytes(svg_bytes)
+                return True
+    except urllib.error.HTTPError:
+        pass
+    except Exception:
+        pass
+    return False
+
+# render via mermaid.ink compressed GET
+def render_via_mermaid_ink(mermaid_text: str, svg_path: Path) -> bool:
+    try:
+        compressed = zlib.compress(mermaid_text.encode("utf-8"), level=9)
+        b64 = base64.urlsafe_b64encode(compressed).decode("ascii").rstrip("=")
+        url = f"https://r.mermaid.ink/svg/{b64}"
+        req = urllib.request.Request(url, headers={"Accept": "image/svg+xml"})
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            if resp.status == 200:
+                svg_path.write_bytes(resp.read())
+                return True
+    except Exception:
+        pass
+    return False
+
+# consolidated render function: try CLI then remote fallbacks
 def render_mermaid_to_svg(mmd_path: Path, svg_path: Path, timeout: int = 20) -> bool:
-    cmds = [
-        ["mmdc", "-p", str(PUPPETEER_CONFIG_PATH), "-i", str(mmd_path), "-o", str(svg_path)],
-        ["npx", "-y", "@mermaid-js/mermaid-cli", "-p", str(PUPPETEER_CONFIG_PATH), "-i", str(mmd_path), "-o", str(svg_path), "--quiet"]]
-    
+    use_puppet_flag = PUPPETEER_CONFIG_PATH.exists()
+
+    cmds = []
+    if use_puppet_flag:
+        cmds.append(["mmdc", "-p", str(PUPPETEER_CONFIG_PATH), "-i", str(mmd_path), "-o", str(svg_path)])
+        cmds.append(["npx", "-y", "@mermaid-js/mermaid-cli", "-p", str(PUPPETEER_CONFIG_PATH), "-i", str(mmd_path), "-o", str(svg_path), "--quiet"])
+    else:
+        cmds.append(["mmdc", "-i", str(mmd_path), "-o", str(svg_path)])
+        cmds.append(["npx", "@mermaid-js/mermaid-cli", "-i", str(mmd_path), "-o", str(svg_path), "--quiet"])
+
     for cmd in cmds:
         try:
             subprocess.run(cmd, check=True, capture_output=True, timeout=timeout)
-            return svg_path.exists()
+            if svg_path.exists():
+                return True
         except FileNotFoundError:
             continue
         except subprocess.CalledProcessError:
@@ -182,23 +225,19 @@ def render_mermaid_to_svg(mmd_path: Path, svg_path: Path, timeout: int = 20) -> 
         except Exception:
             continue
 
-    # Fallback: use hosted Kroki renderer so Railway Python image can still produce SVG.
+    if _DISABLE_REMOTE:
+        return False
+
     try:
         mermaid_text = mmd_path.read_text(encoding="utf-8")
-        req = request.Request(
-            "https://kroki.io/mermaid/svg",
-            data=mermaid_text.encode("utf-8"),
-            headers={"Content-Type": "text/plain; charset=utf-8"},
-            method="POST",
-        )
-        with request.urlopen(req, timeout=timeout) as resp:
-            if resp.status == 200:
-                svg_bytes = resp.read()
-                if svg_bytes:
-                    svg_path.write_bytes(svg_bytes)
-                    return svg_path.exists()
     except Exception:
-        pass
+        return False
+
+    if render_via_kroki(mermaid_text, svg_path, timeout=15):
+        return True
+
+    if render_via_mermaid_ink(mermaid_text, svg_path):
+        return True
 
     return False
 
@@ -220,7 +259,6 @@ def make_docs_with_diagram(repo_dir: Path,
     try:
         mermaid_text = generate_mermaid_syntax(project_name, frameworks, dependencies, file_tree)
     except Exception:
-        # Ensure docs/diagram.mmd still exists even if graph inference fails.
         mermaid_text = "flowchart TD\n  A[Architecture diagram unavailable]\n"
 
     try:
