@@ -258,11 +258,8 @@ def get_dependencies(root: Path, files: List[Path]) -> Dict[str, List[str]]:
 
     return res
 
+# find entry points from files
 def detect_entry_points(root: Path, files: List[Path]) -> List[str]:
-    """
-    Small inline heuristic to find common entry points (main files, package.json script).
-    We keep it deterministic and based only on files we saw.
-    """
     entries = []
     filename_map = {f.name.lower(): f for f in files}
 
@@ -296,7 +293,6 @@ def detect_entry_points(root: Path, files: List[Path]) -> List[str]:
     if (root / "go.mod").exists():
         entries.append("go module (go.mod)")
 
-    # remove duplicates while preserving order
     seen = set()
     out = []
     for e in entries:
@@ -354,7 +350,7 @@ def render_template(template_path: Path, mapping: dict) -> str:
 def re_placeholder_cleanup(s: str) -> str:
     return re.sub(r"\{[^\}]+\}", "", s)
 
-# creates iterator through files
+# creates iterator from files
 def file_iterator(path: Path, chunk_size: int = 8192) -> Iterator[bytes]:
     with path.open("rb") as f:
         while True:
@@ -366,15 +362,15 @@ def file_iterator(path: Path, chunk_size: int = 8192) -> Iterator[bytes]:
 # streams directory out to user
 def stream_dir(root_dir: Path, download_name: str) -> StreamingResponse:
     parent = root_dir.parent or Path("/tmp")
-    base_name = parent / (root_dir.name + "_archive")
-    archive_path_str = shutil.make_archive(base_name=str(base_name), format="zip", root_dir=str(root_dir))
+    base = parent / f"{root_dir.name}_archive"
+    archive_path_str = shutil.make_archive(base_name=str(base), format="zip", root_dir=str(root_dir))
     archive_path = Path(archive_path_str)
 
     iterator = file_iterator(archive_path)
     filename_header = download_name if download_name.endswith(".zip") else f"{download_name}.zip"
     headers = {"Content-Disposition": f'attachment; filename="{filename_header}"'}
 
-    def _cleanup(archive_p=archive_path, root_p=root_dir):
+    def cleanup(archive_p=archive_path, root_p=root_dir):
         try:
             if archive_p.exists():
                 archive_p.unlink()
@@ -386,4 +382,4 @@ def stream_dir(root_dir: Path, download_name: str) -> StreamingResponse:
         except Exception:
             pass
 
-    return StreamingResponse(iterator, media_type="application/zip", headers=headers, background=BackgroundTask(_cleanup))
+    return StreamingResponse(iterator, media_type="application/zip", headers=headers, background=BackgroundTask(cleanup))

@@ -2,6 +2,7 @@ import shutil
 import tempfile
 import re
 import os
+import sys
 import util.methods as methods
 import util.diagram as diagram
 from pathlib import Path
@@ -30,7 +31,7 @@ async def health() -> dict[str, str]:
     return {"status": "ok"}
 
 @app.post('/analyze')
-async def generate_md(file: UploadFile = File(...)):
+async def generate(file: UploadFile = File(...)):
     tmp = tempfile.mkdtemp(prefix="dox_analyze_")
     tmpdir = Path(tmp)
     

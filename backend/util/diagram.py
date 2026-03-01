@@ -184,20 +184,30 @@ def make_docs_with_diagram(repo_dir: Path,
                            dependencies: Dict[str, List[str]],
                            file_tree: Dict[str, Any]) -> Dict[str, Optional[str]]:
     docs = repo_dir / "docs"
-    
-    try:
-        docs.mkdir(exist_ok=True)
-    except Exception:
-        return {"mmd": None, "svg": None, "rendered": False}
-
     mmd_path = docs / "diagram.mmd"
     svg_path = docs / "diagram.svg"
 
-    mermaid_text = generate_mermaid_syntax(project_name, frameworks, dependencies, file_tree)
     try:
+        docs.mkdir(parents=True, exist_ok=True)
+    except Exception:
+        return {"mmd": None, "svg": None, "rendered": False}
+
+    try:
+        mermaid_text = generate_mermaid_syntax(project_name, frameworks, dependencies, file_tree)
+    except Exception:
+        return {"mmd": None, "svg": None, "rendered": False}
+
+    try:
+        mmd_path.parent.mkdir(parents=True, exist_ok=True)
         mmd_path.write_text(mermaid_text, encoding="utf-8")
     except Exception:
         return {"mmd": None, "svg": None, "rendered": False}
 
-    rendered = render_mermaid_to_svg(mmd_path, svg_path)
-    return {"mmd": str(mmd_path), "svg": str(svg_path) if rendered else None, "rendered": rendered}
+    try:
+        rendered = render_mermaid_to_svg(mmd_path, svg_path)
+        if rendered and svg_path.exists():
+            return {"mmd": str(mmd_path), "svg": str(svg_path), "rendered": True}
+    except Exception:
+        pass
+
+    return {"mmd": str(mmd_path), "svg": None, "rendered": False}
