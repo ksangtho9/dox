@@ -2,6 +2,7 @@
 
 import { useState, useRef } from 'react';
 import Image from 'next/image';
+import { createPortal } from 'react-dom';
 import { FallingPattern } from '@/components/ui/falling-pattern';
 import { Upload, Github, ArrowRight, Loader2, AlertCircle } from 'lucide-react';
 
@@ -107,15 +108,15 @@ export default function Home() {
         color="var(--primary)"
         backgroundColor="var(--background)"
       />
-      <div className="absolute inset-0 z-10 flex min-h-screen flex-col items-center px-6 pt-12 pb-64 font-pixel">
+      <div className="absolute inset-0 z-10 flex min-h-screen flex-col items-center px-6 pt-20 pb-64 font-pixel">
         {/* Logo - top left */}
-        <header className="absolute left-6 top-6 flex items-center">
+        <header className="absolute left-6 top-8 flex items-center">
           <Image
             src="/dox-logo.png"
             alt="dox."
-            width={120}
-            height={40}
-            className="h-8 w-auto sm:h-10"
+            width={160}
+            height={53}
+            className="h-10 w-auto sm:h-12"
             priority
           />
         </header>
@@ -178,12 +179,15 @@ export default function Home() {
           </div>
         )}
 
-        {/* Download success */}
-        {downloadSuccess && (
-          <div className="mb-24 w-full max-w-2xl rounded-xl border border-emerald-500/50 bg-emerald-500/10 px-4 py-3 text-center text-sm text-emerald-300">
-            Your repo with generated README is downloading ({downloadSuccess.filename}).
-          </div>
-        )}
+        {/* Download success: portal to body so it never affects layout */}
+        {downloadSuccess &&
+          typeof document !== 'undefined' &&
+          createPortal(
+            <div className="fixed bottom-6 left-1/2 z-[9999] w-full max-w-2xl -translate-x-1/2 rounded-xl border border-emerald-500/50 bg-emerald-500/10 px-4 py-3 text-center text-sm text-emerald-300 shadow-lg">
+              Your repo with generated README is downloading ({downloadSuccess.filename}).
+            </div>,
+            document.body
+          )}
 
         {/* Separator */}
         <p className="mb-6 text-xs text-zinc-500">or</p>
