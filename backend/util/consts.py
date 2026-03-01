@@ -43,3 +43,10 @@ PACKAGES = {
     "go": ["go.mod"],
     "cargo": ["Cargo.toml"],
 }
+
+# diagram constants
+DB_KEYWORDS = {"postgres", "postgresql", "psycopg2", "mysql", "sqlite", "mongodb", "redis"}
+FRONTEND_KEYWORDS = {"react", "vue", "angular", "next", "nextjs", "svelte"}
+SERVICE_DIR_KEYWORDS = {"routes", "controllers", "api", "services"}
+MODEL_DIR_KEYWORDS = {"models", "entities", "schemas"}
+STATIC_DIR_KEYWORDS = {"static", "public", "assets"}

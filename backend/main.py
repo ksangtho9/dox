@@ -2,22 +2,17 @@ import shutil
 import tempfile
 import re
 import os
+import util.methods as methods
+import util.diagram as diagram
 from pathlib import Path
 from fastapi import FastAPI, File, UploadFile, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
-try:
-    from .util import methods
-except ImportError:
-    import util.methods as methods
-
 app = FastAPI(title = "repo analyzer")
-
 
 def _cors_origins() -> list[str]:
     origins = os.getenv("CORS_ORIGINS", "http://localhost:3000,http://127.0.0.1:3000")
     return [origin.strip() for origin in origins.split(",") if origin.strip()]
-
 
 app.add_middleware(
     CORSMiddleware,
@@ -33,7 +28,6 @@ TEMPLATE_PATH = Path(__file__).resolve().parent / "util" / "template.md"
 @app.get("/health")
 async def health() -> dict[str, str]:
     return {"status": "ok"}
-
 
 @app.post('/analyze')
 async def generate_md(file: UploadFile = File(...)):
@@ -168,6 +162,35 @@ async def generate_md(file: UploadFile = File(...)):
         }
 
         readme_path = repo_dir / "README.md"
+        readme_path.write_text(readme, encoding="utf-8")
+
+        try:
+            diagram_info = diagram.make_docs_with_diagram(
+                repo_dir=repo_dir,
+                project_name=project_name,
+                frameworks=frameworks,
+                dependencies=dependencies,
+                file_tree=file_tree,
+            )
+        except Exception:
+            diagram_info = {"mmd": None, "svg": None, "rendered": False}
+
+        if diagram_info.get("rendered") and diagram_info.get("svg"):
+            readme += "\n\n## Automatically generated architecture diagram\n\n"
+            readme += f"![Architecture](docs/diagram.svg)\n"
+        else:
+            mmd_path = diagram_info.get("mmd")
+            
+            if mmd_path:
+                try:
+                    mermaid_source = Path(mmd_path).read_text(encoding="utf-8")
+                except Exception:
+                    mermaid_source = ""
+                
+                if mermaid_source:
+                    readme += "\n\n## Automatically generated architecture diagram (Mermaid)\n\n"
+                    readme += "```mermaid\n" + mermaid_source + "\n```\n"
+
         readme_path.write_text(readme, encoding="utf-8")
 
         safe_name = (project_name or "project").replace(" ", "_")
