@@ -3,6 +3,7 @@ import tempfile
 import re
 import os
 import sys
+import logging
 import util.methods as methods
 import util.diagram as diagram
 from pathlib import Path
@@ -10,6 +11,7 @@ from fastapi import FastAPI, File, UploadFile, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
 app = FastAPI(title = "repo analyzer")
+logger = logging.getLogger(__name__)
 
 def _cors_origins() -> list[str]:
     origins = os.getenv("CORS_ORIGINS", "http://localhost:3000,http://127.0.0.1:3000")
@@ -24,7 +26,6 @@ app.add_middleware(
 )
 
 TEMPLATE_PATH = Path(__file__).resolve().parent / "util" / "template.md"
-
 
 @app.get("/health")
 async def health() -> dict[str, str]:
@@ -174,6 +175,7 @@ async def generate(file: UploadFile = File(...)):
                 file_tree=file_tree,
             )
         except Exception:
+            logger.exception("Diagram generation failed")
             diagram_info = {"mmd": None, "svg": None, "rendered": False}
 
         if diagram_info.get("rendered") and diagram_info.get("svg"):

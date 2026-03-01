@@ -2,7 +2,11 @@ from pathlib import Path
 import subprocess
 import shutil
 from typing import Dict, List, Any, Optional
-from consts import DB_KEYWORDS, FRONTEND_KEYWORDS, SERVICE_DIR_KEYWORDS, MODEL_DIR_KEYWORDS, STATIC_DIR_KEYWORDS
+
+try:
+    from .consts import DB_KEYWORDS, FRONTEND_KEYWORDS, SERVICE_DIR_KEYWORDS, MODEL_DIR_KEYWORDS, STATIC_DIR_KEYWORDS
+except ImportError:
+    from util.consts import DB_KEYWORDS, FRONTEND_KEYWORDS, SERVICE_DIR_KEYWORDS, MODEL_DIR_KEYWORDS, STATIC_DIR_KEYWORDS
 
 # find database from dependencies
 def choose_db(deps: Dict[str, List[str]]) -> Optional[str]:
