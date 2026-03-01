@@ -179,7 +179,7 @@ def get_test(root: Path, files: List[Path]) -> bool:
         if "test" in f.parts:
             return True
         name = f.name.lower()
-        
+
         if name.startswith("test_") or name.startswith("test") or name.endswith(".spec.js") or name.endswith(".test.js"):
             return True
 
@@ -257,3 +257,99 @@ def get_dependencies(root: Path, files: List[Path]) -> Dict[str, List[str]]:
         res["heuristic"] = sorted(set(heuristic), key=lambda x: heuristic.count(x), reverse=True)[:200]
 
     return res
+
+def detect_entry_points(root: Path, files: List[Path]) -> List[str]:
+    """
+    Small inline heuristic to find common entry points (main files, package.json script).
+    We keep it deterministic and based only on files we saw.
+    """
+    entries = []
+    filename_map = {f.name.lower(): f for f in files}
+
+    for cand in ("main.py", "app.py", "server.py", "manage.py", "index.py"):
+        if cand in filename_map:
+            try:
+                entries.append(str(filename_map[cand].relative_to(root)))
+            except Exception:
+                entries.append(str(filename_map[cand]))
+
+    for cand in ("index.js", "server.js", "app.js", "index.ts"):
+        if cand in filename_map:
+            try:
+                entries.append(str(filename_map[cand].relative_to(root)))
+            except Exception:
+                entries.append(str(filename_map[cand]))
+
+    pj = root / "package.json"
+    if pj.exists():
+        try:
+            pjtxt = json.loads(pj.read_text(encoding="utf-8"))
+            main = pjtxt.get("main")
+            if main:
+                entries.append(main)
+            scripts = pjtxt.get("scripts", {})
+            if isinstance(scripts, dict) and "start" in scripts:
+                entries.append("npm start (script)")
+        except Exception:
+            pass
+
+    if (root / "go.mod").exists():
+        entries.append("go module (go.mod)")
+
+    # remove duplicates while preserving order
+    seen = set()
+    out = []
+    for e in entries:
+        if e not in seen:
+            out.append(e)
+            seen.add(e)
+    return out
+
+# convert file tree structure to .md
+def tree_to_markdown(tree: dict, prefix: str = "") -> str:
+    lines = []
+
+    def walk(node: dict, indent: str):
+        name = node.get("name", "")
+        ntype = node.get("type", "dir")
+        if ntype == "dir":
+            lines.append(f"{indent}{name}/")
+            for child in node.get("children", []):
+                walk(child, indent + "  ")
+        else:
+            size = node.get("size")
+            if size is None:
+                lines.append(f"{indent}{name}")
+            else:
+                lines.append(f"{indent}{name} ({size} bytes)")
+
+    if not tree:
+        return ""
+    walk(tree, "")
+    return "\n".join(lines)
+
+# replaces blanks in template.md
+def render_template(template_path: Path, mapping: dict) -> str:
+    txt = template_path.read_text(encoding="utf-8")
+
+    for k, v in mapping.items():
+        if isinstance(v, list):
+            replacement = "\n".join(v) if v else ""
+        elif isinstance(v, dict):
+            try:
+                replacement = "\n".join(
+                    f"- {k}: {', '.join(vals)}" if isinstance(vals, list) else f"- {k}: {vals}"
+                    for k, vals in v.items()
+                )
+            except Exception:
+                replacement = json.dumps(v)
+        else:
+            replacement = str(v) if v is not None else ""
+        txt = txt.replace("{" + k + "}", replacement)
+
+    txt = re_placeholder_cleanup(txt := txt)
+    return txt
+
+# removes any placeholders still left in template.md
+def re_placeholder_cleanup(s: str) -> str:
+    return re.sub(r"\{[^\}]+\}", "", s)
