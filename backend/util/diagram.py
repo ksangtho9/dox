@@ -7,6 +7,7 @@ import urllib.error
 from typing import Dict, List, Any, Optional
 import zlib
 import base64
+import logging
 
 try:
     from .consts import DB_KEYWORDS, FRONTEND_KEYWORDS, SERVICE_DIR_KEYWORDS, MODEL_DIR_KEYWORDS, STATIC_DIR_KEYWORDS
@@ -15,6 +16,8 @@ except ImportError:
 
 PUPPETEER_CONFIG_PATH = Path(__file__).resolve().with_name("puppeteer-config.json")
 _DISABLE_REMOTE = os.getenv("DOX_DISABLE_REMOTE_RENDER", "false").lower() in ("1", "true", "yes")
+
+logger = logging.getLogger(__name__)
 
 # find database from dependencies
 def choose_db(deps: Dict[str, List[str]]) -> Optional[str]:
@@ -170,35 +173,57 @@ def generate_mermaid_syntax(project_name: str,
     return "\n".join(lines)
 
 # render via Kroki (POST)
-def render_via_kroki(mermaid_text: str, svg_path: Path, timeout: int = 15) -> bool:
+def render_via_kroki(mermaid_text: str, svg_path: Path, timeout: int = 20, retries: int = 2) -> bool:
     url = "https://kroki.io/mermaid/svg"
     data = mermaid_text.encode("utf-8")
-    req = urllib.request.Request(url, data=data, headers={"Content-Type": "text/plain; charset=utf-8"})
-    try:
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
-            if resp.status == 200:
-                svg_bytes = resp.read()
-                svg_path.write_bytes(svg_bytes)
-                return True
-    except urllib.error.HTTPError:
-        pass
-    except Exception:
-        pass
+    headers = {
+        "Content-Type": "text/plain; charset=utf-8",
+        "User-Agent": "dox/diagram-renderer/1.0",
+        "Content-Length": str(len(data)),
+    }
+
+    for attempt in range(1, retries + 1):
+        try:
+            req = urllib.request.Request(url, data=data, headers=headers, method="POST")
+            with urllib.request.urlopen(req, timeout=timeout) as resp:
+                if resp.status == 200:
+                    svg_bytes = resp.read()
+                    if svg_bytes:
+                        svg_path.write_bytes(svg_bytes)
+                        return True
+                else:
+                    body = resp.read()[:2000]
+                    logger.debug("Kroki non-200 response: %s, body: %s", resp.status, body)
+        
+        except urllib.error.HTTPError as e:
+            try:
+                err_body = e.read()[:2000]
+                logger.debug("Kroki HTTPError %s: %s", e.code, err_body)
+            except Exception:
+                logger.debug("Kroki HTTPError %s (no body)", getattr(e, "code", "unknown"))
+        except Exception as e:
+            logger.debug("Kroki request attempt %d failed: %s", attempt, e)
+
     return False
 
 # render via mermaid.ink compressed GET
-def render_via_mermaid_ink(mermaid_text: str, svg_path: Path) -> bool:
+def render_via_mermaid_ink(mermaid_text: str, svg_path: Path, timeout: int = 20) -> bool:
     try:
         compressed = zlib.compress(mermaid_text.encode("utf-8"), level=9)
         b64 = base64.urlsafe_b64encode(compressed).decode("ascii").rstrip("=")
         url = f"https://r.mermaid.ink/svg/{b64}"
-        req = urllib.request.Request(url, headers={"Accept": "image/svg+xml"})
-        with urllib.request.urlopen(req, timeout=15) as resp:
+        req = urllib.request.Request(url, headers={"Accept": "image/svg+xml", "User-Agent": "dox/diagram-renderer/1.0"})
+        
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
             if resp.status == 200:
                 svg_path.write_bytes(resp.read())
                 return True
-    except Exception:
-        pass
+            else:
+                logger.debug("mermaid.ink non-200: %s", resp.status)
+    
+    except Exception as e:
+        logger.debug("mermaid.ink failed: %s", e)
+    
     return False
 
 # consolidated render function: try CLI then remote fallbacks
