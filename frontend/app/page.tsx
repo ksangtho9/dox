@@ -5,26 +5,25 @@ import Image from 'next/image';
 import { FallingPattern } from '@/components/ui/falling-pattern';
 import { Upload, Github, ArrowRight, Loader2, AlertCircle } from 'lucide-react';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+function getApiBaseUrl(): string {
+  const env = process.env.NEXT_PUBLIC_API_URL ?? '';
+  if (env) return env.replace(/\/$/, '');
+  if (typeof window !== 'undefined') {
+    const { hostname } = window.location;
+    if (hostname === 'localhost' || hostname === '127.0.0.1') return 'http://localhost:8000';
+  }
+  return '';
+}
 
-type AnalyzeResult = {
-  metadata: {
-    projectName: string;
-    languages: string[];
-    frameworks: string[];
-    package_manager: string | null;
-    entry_points: string[];
-    has_tests: boolean;
-    summary: string;
-  };
-  readme: string;
+type DownloadSuccess = {
+  filename: string;
 };
 
 export default function Home() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [result, setResult] = useState<AnalyzeResult | null>(null);
+  const [downloadSuccess, setDownloadSuccess] = useState<DownloadSuccess | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   async function analyzeFile(file: File) {
@@ -33,23 +32,45 @@ export default function Home() {
       return;
     }
     setError(null);
-    setResult(null);
+    setDownloadSuccess(null);
     setLoading(true);
     try {
+      const baseUrl = getApiBaseUrl();
+      if (!baseUrl) {
+        setError('Backend URL not set. Add NEXT_PUBLIC_API_URL to your environment (e.g. your backend host).');
+        return;
+      }
       const formData = new FormData();
       formData.append('file', file);
-      const res = await fetch(`${API_URL}/analyze`, {
+      const res = await fetch(`${baseUrl}/analyze`, {
         method: 'POST',
         body: formData,
       });
-      const data = await res.json().catch(() => ({}));
+
       if (!res.ok) {
-        setError(data.detail || res.statusText || 'Analysis failed');
+        const data = await res.json().catch(() => ({}));
+        const msg = Array.isArray(data.detail) ? data.detail.map((e: { msg?: string }) => e?.msg).filter(Boolean).join(', ') : data.detail;
+        setError(msg || res.statusText || 'Analysis failed');
         return;
       }
-      setResult(data as AnalyzeResult);
+
+      const blob = await res.blob();
+      const disposition = res.headers.get('Content-Disposition');
+      const match = disposition?.match(/filename="?([^";]+)"?/);
+      const filename = match ? match[1].trim() : 'repo-with-readme.zip';
+
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+
+      setDownloadSuccess({ filename });
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Network error. Is the backend running?');
+      setError(e instanceof Error ? e.message : 'Network error. Ensure the backend is running and CORS allows this origin.');
     } finally {
       setLoading(false);
     }
@@ -155,26 +176,10 @@ export default function Home() {
           </div>
         )}
 
-        {/* Result */}
-        {result && (
-          <div className="mb-24 w-full max-w-2xl rounded-xl border border-zinc-700 bg-black/40 p-6">
-            <div className="mb-4 flex flex-wrap gap-2 text-xs text-zinc-400">
-              {result.metadata.languages?.length > 0 && (
-                <span>Languages: {result.metadata.languages.join(', ')}</span>
-              )}
-              {result.metadata.frameworks?.length > 0 && (
-                <span>Frameworks: {result.metadata.frameworks.join(', ')}</span>
-              )}
-              {result.metadata.package_manager && (
-                <span>Package manager: {result.metadata.package_manager}</span>
-              )}
-              {result.metadata.has_tests && <span>Has tests</span>}
-            </div>
-            <div className="max-h-[60vh] overflow-auto rounded-lg border border-zinc-700 bg-zinc-900/80 p-4">
-              <pre className="whitespace-pre-wrap break-words font-mono text-xs leading-relaxed text-zinc-300">
-                {result.readme}
-              </pre>
-            </div>
+        {/* Download success */}
+        {downloadSuccess && (
+          <div className="mb-24 w-full max-w-2xl rounded-xl border border-emerald-500/50 bg-emerald-500/10 px-4 py-3 text-center text-sm text-emerald-300">
+            Your repo with generated README is downloading ({downloadSuccess.filename}).
           </div>
         )}
 
