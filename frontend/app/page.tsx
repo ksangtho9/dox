@@ -37,7 +37,9 @@ export default function Home() {
     try {
       const baseUrl = getApiBaseUrl();
       if (!baseUrl) {
-        setError('Backend URL not set. Add NEXT_PUBLIC_API_URL to your environment (e.g. your backend host).');
+        setError(
+          'Backend URL not set. On Vercel: Project → Settings → Environment Variables → add NEXT_PUBLIC_API_URL with your Railway backend URL (e.g. https://your-app.up.railway.app), then redeploy.'
+        );
         return;
       }
       const formData = new FormData();

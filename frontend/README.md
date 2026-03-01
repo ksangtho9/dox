@@ -34,3 +34,15 @@ You can check out [the Next.js GitHub repository](https://github.com/vercel/next
 The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
 
 Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+
+### Vercel (frontend) + Railway (backend)
+
+1. **Vercel** – In your project: **Settings → Environment Variables**. Add:
+   - **Name:** `NEXT_PUBLIC_API_URL`
+   - **Value:** Your Railway backend URL, e.g. `https://your-service.up.railway.app` (no trailing slash).
+   Redeploy after adding so the variable is baked into the build.
+
+2. **Railway** – In your backend service: **Variables**. Add:
+   - **Name:** `CORS_ORIGINS`
+   - **Value:** Your Vercel app URL, e.g. `https://your-app.vercel.app` (or `https://your-app.vercel.app,https://your-preview.vercel.app` for previews).
+   This lets the browser allow requests from your frontend to the API.
