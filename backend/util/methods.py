@@ -5,10 +5,13 @@ import json
 import re
 import uvicorn
 import tomllib
+from starlette.responses import StreamingResponse
+from starlette.background import BackgroundTask
 from typing import Dict, Any, List, Optional
 from fastapi import UploadFile, HTTPException
 from fastapi.responses import JSONResponse
 from pathlib import Path
+from typing import Iterator
 from util.consts import EXTENSIONS, FRAMEWORKS, PACKAGES, MAX_UPLOAD, UPLOAD_EXT
 
 # grabs languages from file extensions
@@ -353,3 +356,37 @@ def render_template(template_path: Path, mapping: dict) -> str:
 # removes any placeholders still left in template.md
 def re_placeholder_cleanup(s: str) -> str:
     return re.sub(r"\{[^\}]+\}", "", s)
+
+# creates iterator through files
+def file_iterator(path: Path, chunk_size: int = 8192) -> Iterator[bytes]:
+    with path.open("rb") as f:
+        while True:
+            chunk = f.read(chunk_size)
+            if not chunk:
+                break
+            yield chunk
+
+# streams directory out to user
+def stream_dir(root_dir: Path, download_name: str) -> StreamingResponse:
+    parent = root_dir.parent or Path("/tmp")
+    base_name = parent / (root_dir.name + "_archive")
+    archive_path_str = shutil.make_archive(base_name=str(base_name), format="zip", root_dir=str(root_dir))
+    archive_path = Path(archive_path_str)
+
+    iterator = file_iterator(archive_path)
+    filename_header = download_name if download_name.endswith(".zip") else f"{download_name}.zip"
+    headers = {"Content-Disposition": f'attachment; filename="{filename_header}"'}
+
+    def _cleanup(archive_p=archive_path, root_p=root_dir):
+        try:
+            if archive_p.exists():
+                archive_p.unlink()
+        except Exception:
+            pass
+        
+        try:
+            shutil.rmtree(root_p, ignore_errors=True)
+        except Exception:
+            pass
+
+    return StreamingResponse(iterator, media_type="application/zip", headers=headers, background=BackgroundTask(_cleanup))

@@ -24,14 +24,16 @@ app.add_middleware(
 
 @app.post('/analyze')
 async def generate_md(file: UploadFile = File(...)):
-    with tempfile.TemporaryDirectory(prefix="dox_analyze_") as tmp:
-        tmpdir = Path(tmp)
-
+    tmp = tempfile.mkdtemp(prefix="dox_analyze_")
+    tmpdir = Path(tmp)
+    
+    try:
         try:
             zip_path = methods.save_upload(tmpdir, file)
         except HTTPException:
             raise
         except Exception as e:
+            shutil.rmtree(tmpdir, ignore_errors=True)
             raise HTTPException(status_code=500, detail=f"Failed saving upload: {e}")
 
         repo_dir = tmpdir / "repo"
@@ -40,13 +42,16 @@ async def generate_md(file: UploadFile = File(...)):
         try:
             methods.unzip(zip_path, repo_dir)
         except HTTPException:
+            shutil.rmtree(tmpdir, ignore_errors=True)
             raise
         except Exception as e:
+            shutil.rmtree(tmpdir, ignore_errors=True)
             raise HTTPException(status_code=400, detail=f"Failed to unpack zip: {e}")
 
         files = methods.get_files(repo_dir)
-        
+
         if not files:
+            shutil.rmtree(tmpdir, ignore_errors=True)
             raise HTTPException(status_code=400, detail="Archive contained no files")
 
         languages = methods.get_languages(files)
@@ -60,13 +65,13 @@ async def generate_md(file: UploadFile = File(...)):
 
         project_name = repo_dir.name
         summary_bits = []
-        
+
         if languages:
             summary_bits.append("built with " + ", ".join(languages))
-        
+
         if frameworks:
             summary_bits.append("uses " + ", ".join(frameworks))
-        
+
         summary = "; ".join(summary_bits) if summary_bits else ""
 
         languages_txt = "\n".join(languages) if languages else "None detected"
@@ -74,7 +79,7 @@ async def generate_md(file: UploadFile = File(...)):
         package_manager_txt = package_manager or "None detected"
         entry_points_txt = "\n".join(entry_points) if entry_points else "None detected"
         project_structure_txt = methods.tree_to_markdown(file_tree)
-        
+
         if dependencies:
             parts = []
             for k, v in dependencies.items():
@@ -91,7 +96,7 @@ async def generate_md(file: UploadFile = File(...)):
         env_txt = "\n".join(env_files) if env_files else "None detected"
         test_status = "Yes" if has_tests else "No"
         template_path = Path("util") / "template.md"
-        
+
         if not template_path.exists():
             template_text = (
                 "# {project_name}\n\n"
@@ -151,4 +156,14 @@ async def generate_md(file: UploadFile = File(...)):
             "summary": summary,
         }
 
-        return JSONResponse({"metadata": metadata, "readme": readme})
+        readme_path = repo_dir / "README.md"
+        readme_path.write_text(readme, encoding="utf-8")
+
+        safe_name = (project_name or "project").replace(" ", "_")
+        download_filename = f"{safe_name}.zip"
+
+        return methods.stream_dir(repo_dir, download_filename)
+
+    except Exception:
+        shutil.rmtree(tmpdir, ignore_errors=True)
+        raise
